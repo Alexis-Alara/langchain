@@ -1,0 +1,54 @@
+[
+    {
+        "text": "Impulso IA es una agencia tecnológica y creativa fundada por Juan Carlos Cosío, Alexis de Jesús Aguirre Lara y María del Carmen González González, enfocada en la automatización inteligente de procesos para empresas mediante el desarrollo de páginas web, agentes IA personalizados y herramientas de análisis de datos. Nuestra misión es escalar negocios sin depender de personal adicional, automatizando ventas, atención al cliente, soporte y análisis desde una sola plataforma.",
+        "tenant_id": "cliente_123"
+    },
+    {
+        "text": "Impulso IA se especializa en combinar diseño web profesional, implementación de agentes IA entrenados por negocio, dashboards de análisis y lógica personalizada.",
+        "tenant_id": "cliente_123"
+    },
+    {
+        "text": "Planes de Páginas Web Premium de Impulso IA: Básico: $4,500 + IVA pago inicial / $250 + IVA mensual. Intermedio: $8,000 + IVA pago inicial / $450 + IVA mensual. Pro: $15,000 + IVA pago inicial / $650 + IVA mensual.",
+        "tenant_id": "cliente_123"
+    },
+    {
+        "text": "Web Básico: sitio web de una sección tipo landing page, incluye encabezado, presentación del negocio, llamada a la acción y formulario de contacto básico. botón de WhatsApp directo, ideal para negocios pequeños.",
+        "tenant_id": "cliente_123"
+    },
+    {
+        "text": "Web Intermedio: sitio web de múltiples secciones (Inicio, Nosotros, Servicios, Contacto), diseño dinámico con efectos de desplazamiento y scroll reveal, formularios conectados a Sheets, botón flotante de WhatsApp, opción de conexión a Google Calendar, preparado para añadir blog o agente IA.",
+        "tenant_id": "cliente_123"
+    },
+    {
+        "text": "Web Pro: sitio web personalizado con todas las secciones que el negocio requiera, diseño moderno, visuales avanzados (modo oscuro, efectos 3D, degradados), optimización SEO/AEO, integración con agente IA, dashboards, landing pages, blog y referidos, conexión con EmailJS, WhatsApp, Google Sheets y APIs.",
+        "tenant_id": "cliente_123"
+    },
+    {
+        "text": "Planes de Agentes de Inteligencia Artificial: Básico: $4,500 + IVA inicial / $1,000 + IVA mensual. Intermedio: $8,000 + IVA inicial / $3,000 + IVA mensual. Pro: $15,000 + IVA inicial / $3,000 + IVA mensual.",
+        "tenant_id": "cliente_123"
+    },
+    {
+        "text": "Agente IA Básico: conversaciones inteligentes en tiempo real, identifica necesidades y responde con precisión, más avanzado que un bot tradicional.",
+        "tenant_id": "cliente_123"
+    },
+    {
+        "text": "Agente IA Intermedio: integra ventas, soporte y recordatorios, atiende múltiples clientes y ofrece experiencias personalizadas.",
+        "tenant_id": "cliente_123"
+    },
+    {
+        "text": "Agente IA Pro: funciona con WhatsApp, Webchat y Telegram, conversaciones avanzadas con datos del cliente, filtra prospectos, persuade y agenda citas con intención clara.",
+        "tenant_id": "cliente_123"
+    },
+    {
+        "text": "Integración de página web y agente IA: permite automatizar procesos, recopilar datos, generar leads y brindar atención inmediata 24/7.",
+        "tenant_id": "cliente_123"
+    },
+    {
+        "text": "Servicio de blog: 2 artículos mensuales de 600-800 palabras, enfoque SEO y AEO, redacción profesional adaptada al giro del cliente, enlaces internos estratégicos, diseño responsivo, publicación programada en el sitio web, objetivo: posicionamiento en buscadores y tráfico orgánico de calidad.",
+        "tenant_id": "cliente_123"
+    },
+    {
+        "text": "Proceso de onboarding del cliente: 1) Contrata plan, 2) Llena formulario conectado a Sheets, 3) Se entrena agente IA y personaliza sitio web, 4) Se conecta al dashboard maestro, 5) Acceso a dashboard individual, 6) Alertas de pago y reportes automáticos, 7) Suspensión automática en caso de falta de pago, 8) Registro completo sin intervención humana.",
+        "tenant_id": "cliente_123"
+    }
+]
