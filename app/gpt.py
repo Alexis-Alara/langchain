@@ -1,4 +1,5 @@
 import os
+import json
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from app.services.retrieval import search_semantic
@@ -13,6 +14,15 @@ llm = ChatOpenAI(
 # Plantilla para dar contexto al modelo
 template = """
 Eres un asistente virtual de soporte para clientes.
+Si el usuario quiere crear una cita solicita la fecha, la hora, correo y nombre y, responde solo con un JSON así:
+{{
+  "action": "create_event",
+  "date": "YYYY-MM-DD",
+  "time": "HH:MM",
+  "title": "Cita con ...",
+  "description": "tema ..."
+}}
+Si no hay acción entonces responde normalmente como asistente virtual
 
 Contexto de la empresa:
 {context}
@@ -68,5 +78,15 @@ def generate_answer(question: str, history=None, context=""):
     print(chain_input)
     # Llamada correcta usando invoke
     response = llm.invoke(prompt.format(**chain_input))
-
-    return response.content
+    response_text = response.content
+    try:
+        action_json = json.loads(response_text)
+        if action_json.get("action") == "create_event":
+            print("Detectada acción para crear evento:", action_json)
+            #result = call_google_calendar(action_json)
+            #response_text = f"Cita creada correctamente: {result.get('event_id')}"
+    except json.JSONDecodeError:
+        # No era acción, simplemente seguimos con la respuesta normal
+        pass
+    
+    return response_text
