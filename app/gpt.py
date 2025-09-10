@@ -30,7 +30,12 @@ Contexto de la empresa:
 Pregunta del usuario:
 {query}
 
-Responde de forma natural, clara y útil.
+Analiza la siguiente pregunta: {query}
+
+1. Detecta el idioma principal de la pregunta.
+2. Usa ese mismo idioma en TODA la respuesta, de inicio a fin (sin mezclar con otro idioma).
+3. Responde de forma natural, clara y útil, como si fueras un humano experto en el tema.
+4. Si no logras detectar el idioma, responde en inglés por defecto.
 """
 
 prompt = PromptTemplate(
