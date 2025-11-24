@@ -9,16 +9,15 @@ def call_google_calendar(route: str, event_data: dict, token: str = None):
     base_url = os.getenv("API_BASE_URL", "http://localhost:3000")
     
     payload = {
-        "tenantId": event_data.get("tenantId"),
         "title": event_data["title"],
         "startTime": event_data["startTime"],
         "guestEmails": event_data.get("guestEmails", [])
     }
 
     url = f"{base_url}/api/calendar/appointments"
-    headers = {"Content-Type": "application/json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
+    headers = {"Content-Type": "application/json", "tenant_id": event_data.get("tenantId")}
+    # if token:
+    #     headers["Authorization"] = f"Bearer {token}"
 
     response = requests.post(url, json=payload, headers=headers)
 

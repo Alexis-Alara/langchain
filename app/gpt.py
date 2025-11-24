@@ -29,7 +29,7 @@ def detect_language(text):
         return "es"
 
 system_prompt = """
-Eres un asistente virtual de soporte para clientes.
+Eres un asistente virtual de soporte para clientes tu objetivo es vender y asistir con el negocio.
 
 Reglas:
 1. Detecta el idioma de la pregunta del usuario y responde SIEMPRE en ese idioma.
@@ -46,6 +46,7 @@ Reglas:
 4. Si detectas intención de compra o contacto (mediana o alta) y solo si tienes información del usuario como nombre o correo, genera un JSON así:
 {{
   "action": "capture_lead",
+  "tenantId": "{tenant_id}",
   "name": "...",
   "email": "...",
   "intent_level": "medium/high",
@@ -150,6 +151,7 @@ def generate_answer(question: str, history=None, context=""):
             elif action_json["action"] == "create_event":
                 print("Creando evento en Google Calendar...")
                 result = call_google_calendar('localhost:3000', action_json, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZW5hbnRJZCI6ImNsaWVudGUxIiwiaWF0IjoxNzU3NTQ0NDYzLCJleHAiOjE3NTgxNDkyNjN9.91KPys7IXXA5SgksNIF77EM8o7dqLAKW6jy_iVMrOTA')
+                create_lead(action_json)
                 print("Resultado de la creación del evento:", result)
                 if result["status"] == "success":
                     response_text = f"¡Ya quedo registrada tu cita!"

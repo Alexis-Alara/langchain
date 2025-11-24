@@ -33,7 +33,7 @@ def init_faiss():
     texts, metadatas = [], []
     for doc in collection.find({}):
         texts.append(doc["text"])
-        metadatas.append({"tenant_id": doc.get("tenant_id")})
+        metadatas.append({"tenantId": doc.get("tenantId")})
 
     if texts:
         vector_store = FAISS.from_texts(texts, embeddings_model, metadatas=metadatas)
@@ -52,14 +52,14 @@ def add_document(text: str, tenant_id: str):
 
     # Insertar en Mongo
     emb = embeddings_model.embed_query(text)
-    collection.insert_one({"text": text, "embedding": emb, "tenant_id": tenant_id})
+    collection.insert_one({"text": text, "embedding": emb, "tenantId": tenant_id})
 
     # Agregar a FAISS
     if vector_store is None:
         # Si no existe FAISS, inicializar con este documento
-        vector_store = FAISS.from_texts([text], embeddings_model, metadatas=[{"tenant_id": tenant_id}])
+        vector_store = FAISS.from_texts([text], embeddings_model, metadatas=[{"tenantId": tenant_id}])
     else:
-        vector_store.add_texts([text], metadatas=[{"tenant_id": tenant_id}])
+        vector_store.add_texts([text], metadatas=[{"tenantId": tenant_id}])
 
     # Guardar FAISS en disco
     vector_store.save_local(FAISS_PATH)

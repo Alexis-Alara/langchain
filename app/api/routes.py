@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from app.embeddings import add_document
 from app.services.retrieval import search_semantic
@@ -30,27 +30,31 @@ class AddDocRequest(BaseModel):
 @router.post("/query", response_model=QueryResponse)
 @limiter.limit("5/minute")  # Limite de 5 x minuto por IP
 async def query_endpoint(body: QueryRequest, request: Request):
+    tenant_id = request.headers.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="tenant-id header is required")
     # Recuperar historial de la conversación
-    history = get_conversation_history(body.tenant_id, body.conversation_id)
+    history = get_conversation_history(tenant_id, body.conversation_id)
 
     # Guardar el mensaje del usuario
-    save_message(body.tenant_id, body.conversation_id, "user", body.question)
+    
+    save_message(tenant_id, body.conversation_id, "user", body.question)
 
     # Buscar contexto en FAISS
-    docs = search_semantic(body.question, body.tenant_id)
+    docs = search_semantic(body.question, tenant_id)
     context = "\n".join([doc.page_content for doc in docs])
     
     # Generar respuesta con GPT usando historial + contexto
     answer = generate_answer(body.question, history=history, context=context)
 
     # Guardar la respuesta del bot en el historial
-    save_message(body.tenant_id, body.conversation_id, "assistant", answer)
+    save_message(tenant_id, body.conversation_id, "assistant", answer)
 
-    # answer = generate_answer(body.question, body.tenant_id)
+    # answer = generate_answer(body.question, tenant_id)
     return {"answer": answer}
 
 
-@router.post("/add_document")
-def add_document_endpoint(request: AddDocRequest):
-    add_document(request.text, request.tenant_id)
-    return {"status": "ok", "message": "Documento agregado correctamente."}
+# @router.post("/add_document")
+# def add_document_endpoint(request: AddDocRequest):
+#     add_document(request.text, request.tenant_id)
+#     return {"status": "ok", "message": "Documento agregado correctamente."}

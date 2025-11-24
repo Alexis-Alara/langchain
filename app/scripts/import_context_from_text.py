@@ -12,5 +12,5 @@ with open(JSON_PATH, "r", encoding="utf-8") as f:
 
 # Agregar cada contexto a Mongo y FAISS
 for ctx in contextos:
-    add_document(ctx["text"], ctx["tenant_id"])
-    print(f"Documento agregado para tenant_id={ctx['tenant_id']}")
+    add_document(ctx["text"], ctx["tenantId"])
+    print(f"Documento agregado para tenant_id={ctx['tenantId']}")

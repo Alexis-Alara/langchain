@@ -26,7 +26,7 @@ def search_semantic(query: str, tenant_id: str, k: int = 3) -> List[str]:
 
     # Realiza la búsqueda
     results = embeddings.vector_store.similarity_search(query, k=k)
-    filtered_results = [r for r in results if r.metadata.get("tenant_id") == tenant_id]
+    filtered_results = [r for r in results if r.metadata.get("tenantId") == tenant_id]
     return filtered_results
     #results = vector_store.similarity_search(query, k=k)
     # print(f"Resultados sin filtrar: {len(results)}")
