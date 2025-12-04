@@ -7,8 +7,12 @@ from langdetect import detect
 from app.services.retrieval import search_semantic
 from app.leads import create_lead
 from app.services.google_calendar import call_google_calendar
+from app.services.usage_tracker import save_token_usage
 from dotenv import load_dotenv
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -89,16 +93,22 @@ prompt = PromptTemplate(
 
 #     return response.content
 
-def generate_answer(question: str, history=None, context=""):
+def generate_answer(question: str, history=None, context="", tenant_id: str = None, conversation_id: str = None, source: str = "web"):
     """
     history: lista de mensajes previos [{"role": "...", "content": "..."}]
     context: texto adicional extraído de FAISS
+    tenant_id: ID del tenant para guardar uso
+    conversation_id: ID de la conversación
+    source: fuente de la solicitud (web, whatsapp, etc)
     """
+    
+    # Usar valores por defecto si no se proporcionan
+    tenant_id = tenant_id or TENANT_ID
     
     # Buscar contexto relevante en FAISS si no se proporciona contexto
     if not context:
-        print(f"Buscando contexto en FAISS para tenant_id={TENANT_ID} y query='{question}'")
-        docs = search_semantic(question, TENANT_ID)
+        print(f"Buscando contexto en FAISS para tenant_id={tenant_id} y query='{question}'")
+        docs = search_semantic(question, tenant_id)
         print(f"Documentos encontrados: {len(docs)}")
         if docs:
             context = "\n".join([doc.page_content for doc in docs])
@@ -120,15 +130,47 @@ def generate_answer(question: str, history=None, context=""):
         "context": full_context,
         "query": question,
         "language": question,
-        "tenant_id": TENANT_ID,
+        "tenant_id": tenant_id,
         "timezone": TIMEZONE
     }
 
     print("Generando respuesta con el siguiente input al modelo:")
     print(chain_input)
+    
     # Llamada correcta usando invoke
     response = llm.invoke(prompt.format(**chain_input))
+    print("Respuesta del modelo:")
+    print(response)
+    
+    # Capturar información de tokens de la respuesta
     response_text = response.content
+    usage_metadata = response.response_metadata if hasattr(response, 'response_metadata') else {}
+    
+    # Extraer información de tokens
+    prompt_tokens = 0
+    completion_tokens = 0
+    total_tokens = 0
+    
+    if 'token_usage' in usage_metadata:
+        prompt_tokens = usage_metadata['token_usage'].get('prompt_tokens', 0)
+        completion_tokens = usage_metadata['token_usage'].get('completion_tokens', 0)
+        total_tokens = usage_metadata['token_usage'].get('total_tokens', 0)
+    
+    print(f"Tokens usados - Prompt: {prompt_tokens}, Completion: {completion_tokens}, Total: {total_tokens}")
+    
+    # Guardar uso de tokens en MongoDB
+    if conversation_id:
+        save_token_usage(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            model="gpt-4o-mini",
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            question=question,
+            answer=response_text[:500],  # Guardar primeros 500 caracteres
+            source=source
+        )
     
     raw_answer = response.content
 
