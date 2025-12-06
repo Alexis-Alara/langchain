@@ -2,7 +2,7 @@ from typing import List
 from app.embeddings import vector_store
 import app.embeddings as embeddings
 
-def search_semantic(query: str, tenant_id: str, k: int = 3) -> List[str]:
+def search_semantic(query: str, tenant_id: str, k: int = 5) -> List[str]:
     """
     Realiza una búsqueda semántica en FAISS filtrando por tenant_id.
 
