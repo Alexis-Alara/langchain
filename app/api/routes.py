@@ -94,7 +94,7 @@ async def query_endpoint(body: QueryRequest, request: Request):
     context = "\n".join([doc.page_content for doc in docs])
     
     # Generar respuesta con GPT usando historial + contexto
-    answer = generate_answer(body.question, history=history, context=context)
+    answer = generate_answer(body.question, history=history, context=context, tenant_id=tenant_id, conversation_id=body.conversation_id, source="web")
 
     # Guardar la respuesta del bot en el historial
     save_message(tenant_id, body.conversation_id, "assistant", answer)

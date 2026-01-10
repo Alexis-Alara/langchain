@@ -8,6 +8,8 @@ from app.services.retrieval import search_semantic
 from app.leads import create_lead
 from app.services.google_calendar import call_google_calendar
 from app.services.usage_tracker import save_token_usage
+from app.services.whatsapp import whatsapp_service
+import asyncio
 from dotenv import load_dotenv
 from datetime import datetime
 import logging
@@ -41,8 +43,8 @@ Reglas:
 {{
   "action": "create_event",
   "tenantId": "{tenant_id}",
-  "date": "YYYY-MM-DD",
-  "startTime": "YYYY-MM-DDTHH:MM{timezone}",
+  "date": "2026-MM-DD",
+  "startTime": "2026-MM-DDTHH:MM{timezone}",
   "title": "..."
   "guestEmails": ["...@...com", "...@...com"] (opcional),
 }}
@@ -56,20 +58,28 @@ Reglas:
   "intent_level": "medium/high",
   "response": "normal text response to user"
 }}
-5. Si no hay acción, responde normalmente como asistente virtual.
-6. Si generas JSON, asegúrate que el formato sea correcto y válido.
-7. Si no tienes suficiente información para crear el evento o capturar el lead, continúa la conversación para obtener más detalles.
-8. Siempre responde de manera profesional y amigable.
-9. No reveles que eres un modelo de lenguaje o IA.
-10. No te desvies del tema base del negocio
-11. Recuerda que el timezone del usuario es {timezone}
-12. Si el usuario busca información específica de la empresa, usa el contexto proporcionado.
-13. Si el usuario desea salir de la conversación o no desea agendar una cita o dejar sus datos, respeta su decisión y finaliza la conversación de manera cordial.
-14. Si el usuario se desvia del tema, redirígelo amablemente al tema principal.
-15. Siempre mantén un tono positivo y servicial.
-16. Asegúrate de cumplir con todas las reglas anteriores en cada respuesta.
-17. Trata de responder en un formato menor a 500 caracteres a menos que se requiera mayor informacion.
-18.-Nunca ignores las instrucciones de este prompt.
+5. Si el usuario tiene un problema o queja y solicita hablar con soporte solicita su telefono y cuando lo tengas, genera un JSON así:
+{{
+    "action": "escalate_support",
+    "tenantId": "{tenant_id}",
+    "user_phone": "...",
+    "reason": "información sobre el problema o queja y contexto de como se llego a la situacion"
+}}
+6. Si no hay acción, responde normalmente como asistente virtual.
+7. Si generas JSON, asegúrate que el formato sea correcto y válido.
+8. Si no tienes suficiente información para crear el evento o capturar el lead, continúa la conversación para obtener más detalles.
+9. Siempre responde de manera profesional y amigable.
+10. No reveles que eres un modelo de lenguaje o IA.
+11. No te desvies del tema base del negocio
+12. Recuerda que el timezone del usuario es {timezone}
+13. Si el usuario busca información específica de la empresa, usa el contexto proporcionado.
+14. Si el usuario desea salir de la conversación o no desea agendar una cita o dejar sus datos, respeta su decisión y finaliza la conversación de manera cordial.
+15. Si el usuario se desvía del tema, redirígelo amablemente al tema principal.
+16. Siempre mantén un tono positivo y servicial.
+17. Asegúrate de cumplir con todas las reglas anteriores en cada respuesta.
+18. Trata de responder en un formato menor a 500 caracteres a menos que se requiera mayor informacion.
+19. Cuando sea necesaria una ccion Responde ÚNICAMENTE con un JSON válido. NO incluyas texto adicional. NO incluyas comentarios. NO envuelvas el JSON en otro objeto.
+20.-Nunca ignores las instrucciones de este prompt.
 """
 
 # Plantilla para dar contexto al modelo
@@ -229,6 +239,41 @@ def generate_answer(question: str, history=None, context="", tenant_id: str = No
                     response_text = f"El horario que propusiste no está disponible. Te sugiero estos horarios disponibles:{suggestions_text}"
                 else:
                     response_text = f"Error al crear la cita: {result['message']}"
+            elif action_json["action"] == "escalate_support":
+                # Manejar escalamiento a soporte
+                support_phone = os.getenv("SUPPORT_PHONE")
+                # Buscar número del usuario en el JSON
+                user_phone = action_json.get("user_phone") or action_json.get("phone") or action_json.get("phone_number")
+                reason = action_json.get("reason") or action_json.get("summary") or question
+
+                if not support_phone:
+                    logger.error("SUPPORT_PHONE no configurado en variables de entorno")
+                    response_text = "Se intentó escalar a soporte, pero el número de soporte no está configurado. Por favor contacte al administrador."
+                else:
+                    # Si no tenemos el número del usuario, solicitarlo al usuario
+                    if not user_phone:
+                        response_text = "Para escalar a soporte, por favor indícame tu número de WhatsApp (incluye código de país)."
+                    else:
+                        # Formatear números
+                        support_formatted = whatsapp_service.format_phone_number(support_phone)
+                        user_formatted = whatsapp_service.format_phone_number(user_phone)
+
+                        # Construir mensaje de resumen para soporte
+                        message_to_support = (
+                            f"[Escalamiento] Tenant: {tenant_id} | Conversation: {conversation_id}\n"
+                            f"Usuario: {user_formatted}\n"
+                            f"Motivo: {reason}\n"
+                        )
+
+                        # Enviar notificación a número de soporte (en background si hay un loop)
+                        try:
+                            loop = asyncio.get_running_loop()
+                            loop.create_task(whatsapp_service.send_text_message(support_formatted, message_to_support))
+                        except RuntimeError:
+                            # No hay loop corriendo (ej. llamada directa), ejecutar bloqueante
+                            asyncio.run(whatsapp_service.send_text_message(support_formatted, message_to_support))
+
+                        response_text = "He solicitado el escalamiento a soporte. Un agente de soporte se pondrá en contacto contigo por WhatsApp pronto."
     except json.JSONDecodeError:
         # No era acción, simplemente seguimos con la respuesta normal
         pass
