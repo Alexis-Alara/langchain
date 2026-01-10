@@ -4,6 +4,7 @@ from typing import Optional, List, Dict, Any
 from app.embeddings import add_document
 from app.services.retrieval import search_semantic
 from app.gpt import generate_answer
+from app.gpt import get_availability_suggestions, format_availability_suggestions
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import Limiter
@@ -31,6 +32,11 @@ class QueryResponse(BaseModel):
 class AddDocRequest(BaseModel):
     text: str
     tenant_id: str
+
+class AvailabilityRequest(BaseModel):
+    preferred_date: Optional[str] = None
+    days_ahead: Optional[int] = 7
+    max_slots: Optional[int] = 50
 
 # ---- MODELOS WHATSAPP ----
 class WhatsAppContact(BaseModel):
@@ -103,6 +109,39 @@ async def query_endpoint(body: QueryRequest, request: Request):
     return {"answer": answer}
 
 
+@router.get("/availability")
+@limiter.limit("10/minute")
+async def get_availability_endpoint(request: Request, 
+                                  preferred_date: Optional[str] = None,
+                                  days_ahead: Optional[int] = 7,
+                                  max_slots: Optional[int] = 50):
+    """Endpoint para consultar disponibilidad de horarios"""
+    tenant_id = request.headers.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="tenant-id header is required")
+    
+    try:
+        availability_data = get_availability_suggestions(
+            preferred_date=preferred_date,
+            days_ahead=days_ahead,
+            max_slots=max_slots
+        )
+        
+        if availability_data:
+            formatted_suggestions = format_availability_suggestions(availability_data)
+            return {
+                "status": "success",
+                "data": availability_data,
+                "formatted_suggestions": formatted_suggestions
+            }
+        else:
+            raise HTTPException(status_code=503, detail="No se pudo consultar la disponibilidad")
+    
+    except Exception as e:
+        logging.error(f"Error en endpoint de disponibilidad: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
 # @router.post("/add_document")
 # def add_document_endpoint(request: AddDocRequest):
 #     add_document(request.text, request.tenant_id)
@@ -159,7 +198,14 @@ async def whatsapp_webhook_handler(body: WhatsAppWebhook, request: Request):
                                 # Buscar contexto y generar respuesta
                                 docs = search_semantic(message_text, tenant_id)
                                 context = "\n".join([doc.page_content for doc in docs])
-                                answer = generate_answer(message_text, history=history, context=context)
+                                answer = generate_answer(
+                                    message_text, 
+                                    history=history, 
+                                    context=context, 
+                                    tenant_id=tenant_id, 
+                                    conversation_id=conversation_id, 
+                                    source="whatsapp"
+                                )
                                 
                                 # Guardar respuesta del bot
                                 save_message(tenant_id, conversation_id, "assistant", answer)
