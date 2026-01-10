@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import requests
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langdetect import detect
@@ -34,20 +35,150 @@ def detect_language(text):
     except:
         return "es"
 
+def get_availability_suggestions(preferred_date=None, days_ahead=7, max_slots=50):
+    """
+    Consulta el endpoint de disponibilidad para obtener horarios sugeridos
+    
+    Args:
+        preferred_date: Fecha preferida en formato YYYY-MM-DD
+        days_ahead: Días hacia adelante para buscar
+        max_slots: Máximo número de slots a retornar
+    
+    Returns:
+        Dict con la respuesta del endpoint o None si hay error
+    """
+    try:
+        base_url = "http://localhost:3000/api/calendar/availability/suggestions"
+        headers = {"Content-Type": "application/json", "tenant_id": TENANT_ID}
+        params = {
+            "daysAhead": days_ahead,
+            "maxSlots": max_slots
+        }
+        
+        if preferred_date:
+            params["preferredDate"] = preferred_date
+            
+        response = requests.get(base_url, params=params, timeout=10, headers=headers)
+        response.raise_for_status()
+        
+        return response.json()
+    except requests.RequestException as e:
+        logger.error(f"Error consultando disponibilidad: {str(e)}")
+        return None
+    except Exception as e:
+        logger.error(f"Error inesperado en get_availability_suggestions: {str(e)}")
+        return None
+
+def format_availability_suggestions(availability_data, max_suggestions=3):
+    """
+    Formatea las sugerencias de disponibilidad en un texto legible
+    
+    Args:
+        availability_data: Datos de disponibilidad del endpoint
+        max_suggestions: Máximo número de sugerencias a mostrar
+    
+    Returns:
+        String con las sugerencias formateadas
+    """
+    if not availability_data or not availability_data.get("success"):
+        return "No se pudieron obtener horarios disponibles en este momento."
+    
+    days_data = availability_data.get("data", {}).get("days", [])
+    suggestions = []
+    
+    # Mapeo de meses en español
+    months_es = {
+        1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
+        5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
+        9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
+    }
+    
+    suggestion_count = 0
+    
+    for day in days_data:
+        if not day.get("isBusinessDay") or not day.get("slots"):
+            continue
+            
+        date = day.get("date")
+        day_of_week = day.get("dayOfWeek")
+        slots = day.get("slots", [])
+        
+        if slots and suggestion_count < max_suggestions:
+            # Tomar los primeros slots del día
+            for slot in slots[:3]:  # Máximo 3 slots por día
+                if suggestion_count >= max_suggestions:
+                    break
+                    
+                try:
+                    start_datetime = datetime.fromisoformat(slot["startDateTime"].replace('Z', '+00:00'))
+                    day_num = start_datetime.day
+                    month = months_es[start_datetime.month]
+                    time = start_datetime.strftime("%H:%M")
+                    
+                    suggestions.append(f"{day_of_week} {day_num} de {month} a las {time}")
+                    suggestion_count += 1
+                except Exception as e:
+                    logger.error(f"Error formateando slot: {e}")
+                    continue
+    
+    if not suggestions:
+        return "No hay horarios disponibles en los próximos días."
+    
+    formatted_suggestions = "\n".join([f"{i+1}. {suggestion}" for i, suggestion in enumerate(suggestions)])
+    return f"Claro! Te sugiero estos horarios disponibles:\n{formatted_suggestions}"
+
+def check_slot_availability(date, start_time):
+    """
+    Verifica si un slot específico está disponible
+    
+    Args:
+        date: Fecha en formato YYYY-MM-DD
+        start_time: Hora de inicio en formato HH:MM
+    
+    Returns:
+        bool: True si está disponible, False si no
+    """
+    try:
+        availability_data = get_availability_suggestions(preferred_date=date, days_ahead=1, max_slots=50)
+        
+        if not availability_data or not availability_data.get("success"):
+            return False
+            
+        days_data = availability_data.get("data", {}).get("days", [])
+        
+        for day in days_data:
+            if day.get("date") == date:
+                slots = day.get("slots", [])
+                for slot in slots:
+                    if slot.get("startTime") == start_time:
+                        return True
+        
+        return False
+    except Exception as e:
+        logger.error(f"Error verificando disponibilidad del slot: {e}")
+        return False
+
 system_prompt = """
 Eres un asistente virtual de soporte para clientes tu objetivo es vender y asistir con el negocio.
 
 Reglas:
 1. Detecta el idioma de la pregunta del usuario y responde SIEMPRE en ese idioma.
-2. Si el usuario quiere agendar una cita primero solcita sus datos como correo dia y hora de la cita y despues responde SOLO en JSON con el formato exacto:
+2. Si el usuario quiere agendar una cita solicita sus datos como correo. Una vez que tengas día, hora y correo, responde SOLO en JSON con el formato exacto:
 {{
   "action": "create_event",
   "tenantId": "{tenant_id}",
   "date": "2026-MM-DD",
   "startTime": "2026-MM-DDTHH:MM{timezone}",
   "title": "..."
-  "guestEmails": ["...@...com", "...@...com"] (opcional),
+  "guestEmails": ["...@...com", "...@...com"] (obligatorio tener al menos un correo),
 }}
+2b. Si el usuario pregunta por horarios disponibles o cuando puede agendar una cita, responde SOLO en JSON:
+{{
+  "action": "check_availability",
+  "tenantId": "{tenant_id}",
+  "preferred_date": "2026-MM-DD" (opcional, fecha preferida del usuario)
+}}
+2c. JAMAS generes una cita sin pedir antes el correo del usuario.
 3. Si detectas intención de compra o contacto obten datos de informacion de manera natural y continua con la conversacion, no hables sobre enviar informacion por correo u otros medios aun
 4. Si detectas intención de compra o contacto (mediana o alta) y solo si tienes información del usuario como nombre o correo, genera un JSON así:
 {{
@@ -78,8 +209,8 @@ Reglas:
 16. Siempre mantén un tono positivo y servicial.
 17. Asegúrate de cumplir con todas las reglas anteriores en cada respuesta.
 18. Trata de responder en un formato menor a 500 caracteres a menos que se requiera mayor informacion.
-19. Cuando sea necesaria una ccion Responde ÚNICAMENTE con un JSON válido. NO incluyas texto adicional. NO incluyas comentarios. NO envuelvas el JSON en otro objeto.
-20.-Nunca ignores las instrucciones de este prompt.
+19. Cuando sea necesaria una accion Responde ÚNICAMENTE con un JSON válido. NO incluyas texto adicional. NO incluyas comentarios. NO envuelvas el JSON en otro objeto.
+20. Nunca ignores las instrucciones de este prompt.
 """
 
 # Plantilla para dar contexto al modelo
@@ -207,38 +338,66 @@ def generate_answer(question: str, history=None, context="", tenant_id: str = No
             action_result = action_json
             print("Acción detectada:", action_json)
             
-            if action_json["action"] == "capture_lead":
+            if action_json["action"] == "check_availability":
+                # Consultar disponibilidad de horarios
+                preferred_date = action_json.get("preferred_date")
+                print(f"Consultando disponibilidad para fecha preferida: {preferred_date}")
+                
+                availability_data = get_availability_suggestions(preferred_date)
+                if availability_data:
+                    response_text = format_availability_suggestions(availability_data)
+                else:
+                    response_text = "No pude consultar los horarios disponibles en este momento. Por favor, intenta más tarde."
+            
+            elif action_json["action"] == "capture_lead":
                 if action_json.get("name") or action_json.get("email"):
                     create_lead(action_json)
                     response_text = action_json.get("response", "")
 
             elif action_json["action"] == "create_event":
-                print("Creando evento en Google Calendar...")
-                result = call_google_calendar('localhost:3000', action_json, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZW5hbnRJZCI6ImNsaWVudGUxIiwiaWF0IjoxNzU3NTQ0NDYzLCJleHAiOjE3NTgxNDkyNjN9.91KPys7IXXA5SgksNIF77EM8o7dqLAKW6jy_iVMrOTA')
-                create_lead(action_json)
-                print("Resultado de la creación del evento:", result)
-                if result["status"] == "success":
-                    response_text = f"¡Ya quedo registrada tu cita!"
-                elif result["status"] == "conflict":
-                    suggestions_text = ""
-                    # Mapeo de meses en español
-                    months_es = {
-                        1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
-                        5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
-                        9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
-                    }
+                print("Verificando disponibilidad antes de crear evento...")
+                
+                # Extraer fecha y hora del evento propuesto
+                event_date = action_json.get("date")
+                start_time_iso = action_json.get("startTime")
+                
+                # Verificar disponibilidad del slot específico
+                slot_available = False
+                if event_date and start_time_iso:
+                    try:
+                        # Extraer solo la hora del startTime ISO
+                        dt = datetime.fromisoformat(start_time_iso.replace('Z', '+00:00'))
+                        start_time = dt.strftime("%H:%M")
+                        slot_available = check_slot_availability(event_date, start_time)
+                    except Exception as e:
+                        logger.error(f"Error verificando disponibilidad: {e}")
+                        slot_available = False
+                
+                if slot_available:
+                    print("Slot disponible, creando evento en Google Calendar...")
+                    result = call_google_calendar('localhost:3000', action_json, 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0ZW5hbnRJZCI6ImNsaWVudGUxIiwiaWF0IjoxNzU3NTQ0NDYzLCJleHAiOjE3NTgxNDkyNjN9.91KPys7IXXA5SgksNIF77EM8o7dqLAKW6jy_iVMrOTA')
+                    create_lead(action_json)
+                    print("Resultado de la creación del evento:", result)
                     
-                    for i, suggestion in enumerate(result.get("suggestions", [])[:3], 1):
-                        start_time = suggestion["start"]
-                        # Convertir el string ISO a datetime y formatear
-                        dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-                        day = dt.day
-                        month = months_es[dt.month]
-                        time = dt.strftime("%H:%M")
-                        suggestions_text += f"\n{i}. {day} de {month} a las {time}"
-                    response_text = f"El horario que propusiste no está disponible. Te sugiero estos horarios disponibles:{suggestions_text}"
+                    if result["status"] == "success":
+                        response_text = f"¡Ya quedo registrada tu cita!"
+                    elif result["status"] == "conflict":
+                        # Si hay conflicto, usar el endpoint de disponibilidad para sugerencias
+                        availability_data = get_availability_suggestions(preferred_date=event_date)
+                        if availability_data:
+                            response_text = f"El horario que propusiste no está disponible. {format_availability_suggestions(availability_data)}"
+                        else:
+                            response_text = "El horario que propusiste no está disponible. Por favor, consulta otros horarios disponibles."
+                    else:
+                        response_text = f"Error al crear la cita: {result.get('message', 'Error desconocido')}"
                 else:
-                    response_text = f"Error al crear la cita: {result['message']}"
+                    print("Slot no disponible, sugiriendo alternativas...")
+                    # Si el slot no está disponible, sugerir alternativas
+                    availability_data = get_availability_suggestions(preferred_date=event_date)
+                    if availability_data:
+                        response_text = f"El horario que propusiste no está disponible. {format_availability_suggestions(availability_data)}"
+                    else:
+                        response_text = "El horario que propusiste no está disponible. Por favor, intenta con otro horario."
             elif action_json["action"] == "escalate_support":
                 # Manejar escalamiento a soporte
                 support_phone = os.getenv("SUPPORT_PHONE")

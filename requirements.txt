@@ -9,3 +9,5 @@ uvicorn==0.23.1
 slowapi==0.1.9
 langdetect==1.0.9
 aiohttp==3.9.1
+asyncio==4.0.0
+requests==2.31.0
