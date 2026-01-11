@@ -180,12 +180,13 @@ Reglas:
 }}
 2c. JAMAS generes una cita sin pedir antes el correo del usuario.
 3. Si detectas intención de compra o contacto obten datos de informacion de manera natural y continua con la conversacion, no hables sobre enviar informacion por correo u otros medios aun
-4. Si detectas intención de compra o contacto (mediana o alta) y solo si tienes información del usuario como nombre o correo, genera un JSON así:
+4. Si detectas intención de compra o contacto (mediana o alta) y solo si tienes información del usuario como nombre, correo o telefono, genera un JSON así:
 {{
   "action": "capture_lead",
   "tenantId": "{tenant_id}",
-  "name": "...",
-  "email": "...",
+  "name": "..." (obligatorio al menos nombre, email o telefono),
+  "email": "..." (obligatorio al menos nombre, email o telefono),
+  "phone": "..." (obligatorio al menos nombre, email o telefono),
   "intent_level": "medium/high",
   "response": "normal text response to user"
 }}
