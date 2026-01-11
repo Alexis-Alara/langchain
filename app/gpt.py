@@ -176,7 +176,7 @@ Reglas:
 {{
   "action": "check_availability",
   "tenantId": "{tenant_id}",
-  "preferred_date": "2026-MM-DD" (opcional, fecha preferida del usuario)
+  "preferred_date": "2026-MM-DD" (opcional, fecha preferida del usuario, si el usuario no especifica un mes usa el mes actual)
 }}
 2c. JAMAS generes una cita sin pedir antes el correo del usuario.
 3. Si detectas intención de compra o contacto obten datos de informacion de manera natural y continua con la conversacion, no hables sobre enviar informacion por correo u otros medios aun
