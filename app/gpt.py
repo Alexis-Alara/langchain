@@ -40,7 +40,7 @@ def get_availability_suggestions(preferred_date=None, days_ahead=7, max_slots=50
     Consulta el endpoint de disponibilidad para obtener horarios sugeridos
     
     Args:
-        preferred_date: Fecha preferida en formato YYYY-MM-DD
+        preferred_date: Fecha preferida en formato YYYY-MM-DD (por defecto: hoy)
         days_ahead: Días hacia adelante para buscar
         max_slots: Máximo número de slots a retornar
     
@@ -48,20 +48,17 @@ def get_availability_suggestions(preferred_date=None, days_ahead=7, max_slots=50
         Dict con la respuesta del endpoint o None si hay error
     """
     try:
-        base_url = "http://localhost:3000/api/calendar/availability/suggestions"
+        query_date = preferred_date if preferred_date else datetime.now().strftime("%Y-%m-%d")
+        base_url = "http://localhost:3000/api/calendar/availability/date"
         headers = {"Content-Type": "application/json", "tenant_id": TENANT_ID}
-        params = {
-            "daysAhead": days_ahead,
-            "maxSlots": max_slots
-        }
-        
-        if preferred_date:
-            params["preferredDate"] = preferred_date
+        params = {"date": query_date}
             
         response = requests.get(base_url, params=params, timeout=10, headers=headers)
         response.raise_for_status()
         
-        return response.json()
+        data = response.json()
+        logger.info(f"Respuesta cruda de /availability/date: {json.dumps(data)}")
+        return data
     except requests.RequestException as e:
         logger.error(f"Error consultando disponibilidad: {str(e)}")
         return None
@@ -82,48 +79,36 @@ def format_availability_suggestions(availability_data, max_suggestions=3):
     """
     if not availability_data or not availability_data.get("success"):
         return "No se pudieron obtener horarios disponibles en este momento."
-    
-    days_data = availability_data.get("data", {}).get("days", [])
-    suggestions = []
-    
-    # Mapeo de meses en español
+
+    data = availability_data.get("data", {})
+
+    if not data.get("isBusinessDay") or not data.get("slots"):
+        return "No hay horarios disponibles para ese día."
+
+    day_of_week = data.get("dayOfWeek", "")
+    slots = data.get("slots", [])
+
     months_es = {
         1: "enero", 2: "febrero", 3: "marzo", 4: "abril",
         5: "mayo", 6: "junio", 7: "julio", 8: "agosto",
         9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre"
     }
-    
-    suggestion_count = 0
-    
-    for day in days_data:
-        if not day.get("isBusinessDay") or not day.get("slots"):
+
+    suggestions = []
+    for slot in slots[:max_suggestions]:
+        try:
+            start_datetime = datetime.fromisoformat(slot["startDateTime"].replace('Z', '+00:00'))
+            day_num = start_datetime.day
+            month = months_es[start_datetime.month]
+            time = start_datetime.strftime("%H:%M")
+            suggestions.append(f"{day_of_week} {day_num} de {month} a las {time}")
+        except Exception as e:
+            logger.error(f"Error formateando slot: {e}")
             continue
-            
-        date = day.get("date")
-        day_of_week = day.get("dayOfWeek")
-        slots = day.get("slots", [])
-        
-        if slots and suggestion_count < max_suggestions:
-            # Tomar los primeros slots del día
-            for slot in slots[:3]:  # Máximo 3 slots por día
-                if suggestion_count >= max_suggestions:
-                    break
-                    
-                try:
-                    start_datetime = datetime.fromisoformat(slot["startDateTime"].replace('Z', '+00:00'))
-                    day_num = start_datetime.day
-                    month = months_es[start_datetime.month]
-                    time = start_datetime.strftime("%H:%M")
-                    
-                    suggestions.append(f"{day_of_week} {day_num} de {month} a las {time}")
-                    suggestion_count += 1
-                except Exception as e:
-                    logger.error(f"Error formateando slot: {e}")
-                    continue
-    
+
     if not suggestions:
         return "No hay horarios disponibles en los próximos días."
-    
+
     formatted_suggestions = "\n".join([f"{i+1}. {suggestion}" for i, suggestion in enumerate(suggestions)])
     return f"Claro! Te sugiero estos horarios disponibles:\n{formatted_suggestions}"
 
@@ -225,9 +210,9 @@ Pregunta del usuario:
 Responde estrictamente en el lenguaje de este texto {language}.
 """
 
-combined_prompt = system_prompt + "\n" + template
+combined_prompt = "Fecha y hora actual: {current_date}\n\n" + system_prompt + "\n" + template
 prompt = PromptTemplate(
-    input_variables=["context", "query", "language", "tenant_id", "timezone"],
+    input_variables=["context", "query", "language", "tenant_id", "timezone", "current_date"],
     template=combined_prompt
 )
 
@@ -285,7 +270,8 @@ def generate_answer(question: str, history=None, context="", tenant_id: str = No
         "query": question,
         "language": question,
         "tenant_id": tenant_id,
-        "timezone": TIMEZONE
+        "timezone": TIMEZONE,
+        "current_date": datetime.now().strftime("%Y-%m-%d (%A)")
     }
 
     print("Generando respuesta con el siguiente input al modelo:")
