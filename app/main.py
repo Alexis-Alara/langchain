@@ -1,5 +1,5 @@
 # app/main.py
-# Archivo principal para iniciar la aplicación FastAPI
+# Archivo principal para iniciar la aplicacion FastAPI
 # Uso:  python3 -m uvicorn app.main:app --reload
 from fastapi import FastAPI
 from app.embeddings import init_faiss
@@ -22,7 +22,7 @@ limiter = Limiter(key_func=lambda request: request.headers.get("x-api-key", "ano
 
 app = FastAPI(
     title="Impulso Chatbot API",
-    description="API para chatbot con integración de WhatsApp Business",
+    description="API para chatbot con integracion de WhatsApp, Messenger e Instagram",
     version="1.0.0"
 )
 
@@ -34,6 +34,7 @@ app.add_middleware(SlowAPIMiddleware)
 # Montar las rutas de la API
 app.include_router(api_router, prefix="/api")
 
+
 @app.get("/")
 async def root():
     return {
@@ -42,9 +43,14 @@ async def root():
             "/api/query - Chat endpoint",
             "/api/whatsapp/webhook - WhatsApp webhook",
             "/api/whatsapp/send - Send WhatsApp message",
-            "/api/whatsapp/send-template - Send WhatsApp template"
+            "/api/whatsapp/send-template - Send WhatsApp template",
+            "/api/meta/webhook - Messenger/Instagram webhook",
+            "/api/meta/send - Send Messenger/Instagram message",
+            "/api/messenger/send - Send Messenger message",
+            "/api/instagram/send - Send Instagram message"
         ]
     }
+
 
 @app.get("/health")
 async def health_check():

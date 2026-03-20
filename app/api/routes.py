@@ -4,16 +4,16 @@ from typing import Optional, List, Dict, Any
 from app.embeddings import add_document
 from app.services.retrieval import search_semantic
 from app.gpt import generate_answer
-from app.gpt import get_availability_suggestions, format_availability_suggestions
+from app.services.appointments.availability import (
+    format_availability_suggestions,
+    get_availability_suggestions,
+)
 from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 from slowapi.extension import Limiter
 from app.chat_history import get_conversation_history, save_message
 from app.services.whatsapp import whatsapp_service
-import json
+from app.services.meta_messaging import meta_messaging_service
 import logging
-import hashlib
-import hmac
 import os
 
 limiter = Limiter(key_func=get_remote_address)
@@ -79,6 +79,48 @@ class WhatsAppSendMessage(BaseModel):
     to: str
     type: str = "text"
     text: Dict[str, str]
+
+
+class MetaSendMessage(BaseModel):
+    platform: str = "messenger"
+    to: str
+    type: str = "text"
+    text: Dict[str, str]
+
+
+class MetaChannelSendMessage(BaseModel):
+    to: str
+    type: str = "text"
+    text: Dict[str, str]
+
+
+def _default_tenant_id() -> str:
+    """Tenant por defecto para webhooks (sin headers personalizados)."""
+    return os.getenv("TENANT_ID", "default")
+
+
+def _generate_and_store_answer(
+    tenant_id: str,
+    conversation_id: str,
+    message_text: str,
+    source: str,
+) -> str:
+    """Genera respuesta con contexto y la guarda en historial."""
+    history = get_conversation_history(tenant_id, conversation_id)
+    save_message(tenant_id, conversation_id, "user", message_text)
+
+    docs = search_semantic(message_text, tenant_id)
+    context = "\n".join([doc.page_content for doc in docs])
+    answer = generate_answer(
+        message_text,
+        history=history,
+        context=context,
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+        source=source,
+    )
+    save_message(tenant_id, conversation_id, "assistant", answer)
+    return answer
 
 
 # ---- ENDPOINTS ----
@@ -270,3 +312,148 @@ async def send_whatsapp_template_endpoint(request: Request,
     except Exception as e:
         logging.error(f"Error enviando plantilla de WhatsApp: {str(e)}")
         raise HTTPException(status_code=500, detail="Error enviando plantilla")
+
+
+# ---- ENDPOINTS MESSENGER / INSTAGRAM ----
+@router.get("/meta/webhook")
+@router.get("/messenger/webhook")
+@router.get("/instagram/webhook")
+async def meta_webhook_verification(request: Request):
+    """Verificacion del webhook para Messenger e Instagram."""
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
+
+    if mode == "subscribe" and token == meta_messaging_service.verify_token:
+        logging.info("Webhook de Meta verificado exitosamente")
+        return int(challenge)
+
+    raise HTTPException(status_code=403, detail="Token de verificacion invalido")
+
+
+@router.post("/meta/webhook")
+@router.post("/messenger/webhook")
+@router.post("/instagram/webhook")
+@limiter.limit("20/minute")
+async def meta_webhook_handler(body: Dict[str, Any], request: Request):
+    """Recibe mensajes de Messenger e Instagram y responde con el chatbot."""
+    logging.info("Webhook de Meta recibido")
+
+    raw_payload = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256")
+    if not meta_messaging_service.verify_signature(raw_payload, signature):
+        raise HTTPException(status_code=403, detail="Firma de webhook invalida")
+
+    object_type = str(body.get("object", "")).lower()
+    if object_type not in ("page", "instagram"):
+        return {"status": "ignored", "reason": "unsupported_object"}
+
+    source = "instagram" if object_type == "instagram" else "messenger"
+    tenant_id = _default_tenant_id()
+    processed = 0
+
+    try:
+        for entry in body.get("entry", []):
+            for event in entry.get("messaging", []):
+                sender_id = event.get("sender", {}).get("id")
+                message = event.get("message")
+
+                if not sender_id or not message:
+                    continue
+                if message.get("is_echo"):
+                    continue
+
+                message_text = message.get("text")
+                if not message_text:
+                    continue
+
+                conversation_id = f"{source}_{sender_id}"
+                logging.info("Mensaje recibido de %s (%s): %s", sender_id, source, message_text)
+
+                answer = _generate_and_store_answer(
+                    tenant_id=tenant_id,
+                    conversation_id=conversation_id,
+                    message_text=message_text,
+                    source=source,
+                )
+
+                await meta_messaging_service.send_text_message(
+                    platform=source,
+                    recipient_id=sender_id,
+                    message=answer,
+                )
+                processed += 1
+
+        return {"status": "success", "processed": processed}
+
+    except Exception as e:
+        logging.error(f"Error procesando webhook de Meta: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
+@router.post("/meta/send")
+@limiter.limit("10/minute")
+async def send_meta_message_endpoint(message: MetaSendMessage, request: Request):
+    """Envia mensaje manual a Messenger o Instagram."""
+    tenant_id = request.headers.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="tenant-id header is required")
+
+    if message.type != "text":
+        raise HTTPException(status_code=400, detail="Solo se soportan mensajes de tipo text")
+
+    text_body = message.text.get("body")
+    if not text_body:
+        raise HTTPException(status_code=400, detail="El campo text.body es requerido")
+
+    try:
+        platform = meta_messaging_service.normalize_platform(message.platform)
+        result = await meta_messaging_service.send_text_message(
+            platform=platform,
+            recipient_id=message.to,
+            message=text_body,
+        )
+
+        conversation_id = f"{platform}_{message.to}"
+        save_message(tenant_id, conversation_id, "assistant", text_body)
+
+        return {
+            "status": "success",
+            "message_id": result.get("message_id"),
+            "recipient_id": result.get("recipient_id"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error enviando mensaje de Meta: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error enviando mensaje")
+
+
+@router.post("/messenger/send")
+@limiter.limit("10/minute")
+async def send_messenger_message_endpoint(message: MetaChannelSendMessage, request: Request):
+    """Atajo para enviar mensaje manual por Messenger."""
+    return await send_meta_message_endpoint(
+        MetaSendMessage(
+            platform="messenger",
+            to=message.to,
+            type=message.type,
+            text=message.text,
+        ),
+        request,
+    )
+
+
+@router.post("/instagram/send")
+@limiter.limit("10/minute")
+async def send_instagram_message_endpoint(message: MetaChannelSendMessage, request: Request):
+    """Atajo para enviar mensaje manual por Instagram."""
+    return await send_meta_message_endpoint(
+        MetaSendMessage(
+            platform="instagram",
+            to=message.to,
+            type=message.type,
+            text=message.text,
+        ),
+        request,
+    )
