@@ -377,18 +377,22 @@ async def meta_webhook_handler(body: Dict[str, Any], request: Request):
                     source=source,
                 )
 
-                await meta_messaging_service.send_text_message(
-                    platform=source,
-                    recipient_id=sender_id,
-                    message=answer,
-                )
+                try:
+                    await meta_messaging_service.send_text_message(
+                        platform=source,
+                        recipient_id=sender_id,
+                        message=answer,
+                    )
+                except Exception as send_err:
+                    logging.error(f"Error enviando respuesta a {sender_id}: {send_err}")
                 processed += 1
 
         return {"status": "success", "processed": processed}
 
     except Exception as e:
         logging.error(f"Error procesando webhook de Meta: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+        # Siempre devolver 200 para que Meta no reintente el webhook
+        return {"status": "error", "detail": str(e)}
 
 
 @router.post("/meta/send")
@@ -427,6 +431,26 @@ async def send_meta_message_endpoint(message: MetaSendMessage, request: Request)
     except Exception as e:
         logging.error(f"Error enviando mensaje de Meta: {str(e)}")
         raise HTTPException(status_code=500, detail="Error enviando mensaje")
+
+
+@router.get("/meta/diagnostics")
+@limiter.limit("10/minute")
+async def meta_diagnostics_endpoint(request: Request):
+    """Diagnostico de configuracion y vinculacion para Messenger/Instagram."""
+    tenant_id = request.headers.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="tenant-id header is required")
+
+    try:
+        return {
+            "status": "success",
+            "data": meta_messaging_service.get_diagnostics(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error generando diagnostico de Meta: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error generando diagnostico de Meta")
 
 
 @router.post("/messenger/send")
