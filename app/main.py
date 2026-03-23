@@ -5,7 +5,8 @@ from fastapi import FastAPI
 from app.embeddings import init_faiss
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
-from app.api.routes import router as api_router
+from app.routes.api import router as api_router
+from app.routes.twilio_voice import router as twilio_voice_router
 import logging
 
 # Configurar logging
@@ -33,6 +34,7 @@ app.add_middleware(SlowAPIMiddleware)
 
 # Montar las rutas de la API
 app.include_router(api_router, prefix="/api")
+app.include_router(twilio_voice_router, prefix="/api")
 
 @app.get("/")
 async def root():

@@ -128,6 +128,39 @@ class WhatsAppService:
             logger.error(f"Error enviando plantilla: {str(e)}")
             raise HTTPException(status_code=500, detail="Error interno del servidor")
     
+    async def download_media(self, media_id: str) -> bytes:
+        """
+        Descarga el contenido binario de un media de WhatsApp usando su media_id.
+        Primero obtiene la URL temporal del media y luego descarga los bytes.
+        """
+        if not self.validate_config():
+            raise HTTPException(status_code=500, detail="Configuración de WhatsApp incompleta")
+
+        media_info_url = f"https://graph.facebook.com/v17.0/{media_id}"
+        headers = self.get_headers()
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Paso 1: obtener la URL temporal del media
+                async with session.get(media_info_url, headers=headers) as resp:
+                    if resp.status != 200:
+                        raise HTTPException(status_code=resp.status, detail="Error obteniendo URL del media")
+                    media_info = await resp.json()
+                    media_url = media_info.get("url")
+
+                if not media_url:
+                    raise HTTPException(status_code=500, detail="URL del media no encontrada")
+
+                # Paso 2: descargar el contenido binario
+                async with session.get(media_url, headers={"Authorization": f"Bearer {self.access_token}"}) as resp:
+                    if resp.status != 200:
+                        raise HTTPException(status_code=resp.status, detail="Error descargando el media")
+                    return await resp.read()
+
+        except aiohttp.ClientError as e:
+            logger.error(f"Error de conexión descargando media {media_id}: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error de conexión descargando media")
+
     def format_phone_number(self, phone: str) -> str:
         """
         Formatea un número de teléfono para WhatsApp
