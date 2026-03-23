@@ -1,22 +1,25 @@
 from fastapi import APIRouter, Request, HTTPException, WebSocket, WebSocketDisconnect, Response
-from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+from slowapi.util import get_remote_address
+from slowapi.extension import Limiter
+from openai import AsyncOpenAI
+from pydantic import BaseModel
+
 from app.embeddings import add_document
 from app.services.retrieval import search_semantic
 from app.gpt import generate_answer
-from app.gpt import get_availability_suggestions, format_availability_suggestions
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi.extension import Limiter
+from app.services.appointments.availability import (
+    format_availability_suggestions,
+    get_availability_suggestions,
+)
+
 from app.chat_history import get_conversation_history, save_message
 from app.services.whatsapp import whatsapp_service
-import io
-import json
+from app.services.meta_messaging import meta_messaging_service
+
 import logging
-import hashlib
-import hmac
+import io
 import os
-from openai import AsyncOpenAI
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -89,6 +92,24 @@ class WhatsAppSendMessage(BaseModel):
     type: str = "text"
     text: Dict[str, str]
 
+# ---- MODELOS META ----
+class MetaSendMessage(BaseModel):
+    platform: str = "messenger"
+    to: str
+    type: str = "text"
+    text: Dict[str, str]
+
+
+class MetaChannelSendMessage(BaseModel):
+    to: str
+    type: str = "text"
+    text: Dict[str, str]
+
+
+def _default_tenant_id() -> str:
+    """Tenant por defecto para webhooks (sin headers personalizados)."""
+    return os.getenv("TENANT_ID", "default")
+
 
 # ---- ENDPOINTS ----
 @router.post("/query", response_model=QueryResponse)
@@ -116,39 +137,6 @@ async def query_endpoint(body: QueryRequest, request: Request):
 
     # answer = generate_answer(body.question, tenant_id)
     return {"answer": answer}
-
-
-@router.get("/availability")
-@limiter.limit("10/minute")
-async def get_availability_endpoint(request: Request, 
-                                  preferred_date: Optional[str] = None,
-                                  days_ahead: Optional[int] = 7,
-                                  max_slots: Optional[int] = 50):
-    """Endpoint para consultar disponibilidad de horarios"""
-    tenant_id = request.headers.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="tenant-id header is required")
-    
-    try:
-        availability_data = get_availability_suggestions(
-            preferred_date=preferred_date,
-            days_ahead=days_ahead,
-            max_slots=max_slots
-        )
-        
-        if availability_data:
-            formatted_suggestions = format_availability_suggestions(availability_data)
-            return {
-                "status": "success",
-                "data": availability_data,
-                "formatted_suggestions": formatted_suggestions
-            }
-        else:
-            raise HTTPException(status_code=503, detail="No se pudo consultar la disponibilidad")
-    
-    except Exception as e:
-        logging.error(f"Error en endpoint de disponibilidad: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
 # @router.post("/add_document")
@@ -181,7 +169,7 @@ async def whatsapp_webhook_handler(body: WhatsAppWebhook, request: Request):
     logging.info("Webhook de WhatsApp recibido")
     try:
         logging.info("Webhook de WhatsApp recibido")
-        tenant_id = 'cliente1'
+        tenant_id = _default_tenant_id()
         
         for entry in body.entry:
             for change in entry.changes:
@@ -276,54 +264,111 @@ async def whatsapp_webhook_handler(body: WhatsAppWebhook, request: Request):
     
     except Exception as e:
         logging.error(f"Error procesando webhook de WhatsApp: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error interno del servidor")
+        # Siempre devolver 200 para que Whatsapp no reintente el webhook
+        return {"status": "error", "detail": str(e)}
+
+# ---- ENDPOINTS MESSENGER / INSTAGRAM ----
+@router.get("/meta/webhook")
+@router.get("/messenger/webhook")
+@router.get("/instagram/webhook")
+async def meta_webhook_verification(request: Request):
+    """Verificacion del webhook para Messenger e Instagram."""
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
+
+    if mode == "subscribe" and token == meta_messaging_service.verify_token:
+        logging.info("Webhook de Meta verificado exitosamente")
+        return int(challenge)
+
+    raise HTTPException(status_code=403, detail="Token de verificacion invalido")
 
 
-@router.post("/whatsapp/send")
+@router.post("/meta/webhook")
+@router.post("/messenger/webhook")
+@router.post("/instagram/webhook")
+@limiter.limit("20/minute")
+async def meta_webhook_handler(body: Dict[str, Any], request: Request):
+    """Recibe mensajes de Messenger e Instagram y responde con el chatbot."""
+    logging.info("Webhook de Meta recibido")
+
+    raw_payload = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256")
+    if not meta_messaging_service.verify_signature(raw_payload, signature):
+        raise HTTPException(status_code=403, detail="Firma de webhook invalida")
+
+    object_type = str(body.get("object", "")).lower()
+    if object_type not in ("page", "instagram"):
+        return {"status": "ignored", "reason": "unsupported_object"}
+
+    source = "instagram" if object_type == "instagram" else "messenger"
+    tenant_id = _default_tenant_id()
+    processed = 0
+
+    try:
+        for entry in body.get("entry", []):
+            for event in entry.get("messaging", []):
+                sender_id = event.get("sender", {}).get("id")
+                message = event.get("message")
+
+                if not sender_id or not message:
+                    continue
+                if message.get("is_echo"):
+                    continue
+
+                message_text = message.get("text")
+                if not message_text:
+                    continue
+
+                conversation_id = f"{source}_{sender_id}"
+                logging.info("Mensaje recibido de %s (%s): %s", sender_id, source, message_text)
+                
+                history = get_conversation_history(tenant_id, conversation_id)
+                save_message(tenant_id, conversation_id, "user", message_text)
+                
+                docs = search_semantic(message_text, tenant_id)
+                context = "\n".join([doc.page_content for doc in docs])
+                answer = generate_answer(
+                    message_text, 
+                    history=history, 
+                    context=context, 
+                    tenant_id=tenant_id, 
+                    conversation_id=conversation_id, 
+                    source="meta"
+                )
+                
+                # Guardar respuesta del bot
+                save_message(tenant_id, conversation_id, "assistant", answer)
+
+                await meta_messaging_service.send_text_message(
+                    platform=source,
+                    recipient_id=sender_id,
+                    message=answer,
+                )
+                processed += 1
+
+        return {"status": "success", "processed": processed}
+
+    except Exception as e:
+        logging.error(f"Error procesando webhook de Meta: {str(e)}")
+        # Siempre devolver 200 para que Meta no reintente el webhook
+        return {"status": "error", "detail": str(e)}
+
+@router.get("/meta/diagnostics")
 @limiter.limit("10/minute")
-async def send_whatsapp_message_endpoint(message: WhatsAppSendMessage, request: Request):
-    """Endpoint para enviar mensajes de WhatsApp manualmente"""
+async def meta_diagnostics_endpoint(request: Request):
+    """Diagnostico de configuracion y vinculacion para Messenger/Instagram."""
     tenant_id = request.headers.get("tenant_id")
     if not tenant_id:
         raise HTTPException(status_code=400, detail="tenant-id header is required")
-    
-    try:
-        # Formatear número de teléfono
-        formatted_phone = whatsapp_service.format_phone_number(message.to)
-        
-        # Enviar mensaje usando el servicio
-        result = await whatsapp_service.send_text_message(formatted_phone, message.text["body"])
-        
-        # Guardar en el historial
-        conversation_id = f"whatsapp_{formatted_phone}"
-        save_message(tenant_id, conversation_id, "assistant", message.text["body"])
-        
-        return {"status": "success", "message_id": result.get("messages", [{}])[0].get("id")}
-    except Exception as e:
-        logging.error(f"Error enviando mensaje de WhatsApp: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error enviando mensaje")
 
-
-# Endpoint adicional para enviar plantillas
-@router.post("/whatsapp/send-template")
-@limiter.limit("5/minute")
-async def send_whatsapp_template_endpoint(request: Request, 
-                                        to: str, 
-                                        template_name: str, 
-                                        language_code: str = "es"):
-    """Endpoint para enviar plantillas de WhatsApp"""
-    tenant_id = request.headers.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=400, detail="tenant-id header is required")
-    
     try:
-        # Formatear número de teléfono
-        formatted_phone = whatsapp_service.format_phone_number(to)
-        
-        # Enviar plantilla usando el servicio
-        result = await whatsapp_service.send_template_message(formatted_phone, template_name, language_code)
-        
-        return {"status": "success", "message_id": result.get("messages", [{}])[0].get("id")}
+        return {
+            "status": "success",
+            "data": meta_messaging_service.get_diagnostics(),
+        }
+    except HTTPException:
+        raise
     except Exception as e:
-        logging.error(f"Error enviando plantilla de WhatsApp: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error enviando plantilla")
+        logging.error(f"Error generando diagnostico de Meta: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error generando diagnostico de Meta")
