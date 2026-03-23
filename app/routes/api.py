@@ -10,11 +10,13 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.extension import Limiter
 from app.chat_history import get_conversation_history, save_message
 from app.services.whatsapp import whatsapp_service
+import io
 import json
 import logging
 import hashlib
 import hmac
 import os
+from openai import AsyncOpenAI
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -46,11 +48,18 @@ class WhatsAppContact(BaseModel):
 class WhatsAppText(BaseModel):
     body: str
 
+class WhatsAppAudio(BaseModel):
+    id: str
+    mime_type: Optional[str] = None
+    sha256: Optional[str] = None
+    voice: Optional[bool] = None
+
 class WhatsAppMessage(BaseModel):
     from_: str = None
     id: str
     timestamp: str
     text: Optional[WhatsAppText] = None
+    audio: Optional[WhatsAppAudio] = None
     type: str
     
     class Config:
@@ -212,6 +221,55 @@ async def whatsapp_webhook_handler(body: WhatsAppWebhook, request: Request):
                                 # Enviar respuesta usando el servicio de WhatsApp
                                 await whatsapp_service.send_text_message(phone_number, answer)
                                 
+                                logging.info(f"Respuesta enviada a {phone_number}: {answer[:100]}...")
+
+                            elif message.type == "audio" and message.audio:
+                                phone_number = whatsapp_service.format_phone_number(message.from_)
+                                conversation_id = f"whatsapp_{phone_number}"
+
+                                logging.info(f"Audio recibido de {phone_number}, media_id: {message.audio.id}")
+
+                                try:
+                                    # Descargar el audio desde WhatsApp
+                                    audio_bytes = await whatsapp_service.download_media(message.audio.id)
+
+                                    # Transcribir con Whisper
+                                    oai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                                    audio_file = io.BytesIO(audio_bytes)
+                                    audio_file.name = "audio.ogg"
+                                    transcript = await oai_client.audio.transcriptions.create(
+                                        model="whisper-1",
+                                        file=audio_file
+                                    )
+                                    message_text = transcript.text
+                                    logging.info(f"Audio transcrito de {phone_number}: {message_text}")
+
+                                except Exception as audio_err:
+                                    logging.error(f"Error procesando audio de {phone_number}: {audio_err}")
+                                    await whatsapp_service.send_text_message(
+                                        phone_number,
+                                        "Lo siento, no pude procesar tu mensaje de voz. Por favor escríbelo."
+                                    )
+                                    continue
+
+                                # Procesar la transcripción igual que un mensaje de texto
+                                history = get_conversation_history(tenant_id, conversation_id)
+                                save_message(tenant_id, conversation_id, "user", message_text)
+
+                                docs = search_semantic(message_text, tenant_id)
+                                context = "\n".join([doc.page_content for doc in docs])
+                                answer = generate_answer(
+                                    message_text,
+                                    history=history,
+                                    context=context,
+                                    tenant_id=tenant_id,
+                                    conversation_id=conversation_id,
+                                    source="whatsapp"
+                                )
+
+                                save_message(tenant_id, conversation_id, "assistant", answer)
+                                await whatsapp_service.send_text_message(phone_number, answer)
+
                                 logging.info(f"Respuesta enviada a {phone_number}: {answer[:100]}...")
         
         return {"status": "success"}
