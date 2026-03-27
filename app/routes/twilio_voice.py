@@ -15,10 +15,10 @@ from app.gpt import (
     get_availability_suggestions,
     format_availability_suggestions,
     check_slot_availability,
-    system_prompt,
     TENANT_ID,
     TIMEZONE,
 )
+from app.prompting import build_system_prompt
 from app.chat_history import get_conversation_history, save_message
 from app.services.whatsapp import whatsapp_service
 
@@ -152,19 +152,14 @@ def _build_voice_instructions(faiss_context: str, tenant_id: str) -> str:
         "\n- Cuando necesites ejecutar una acción (capturar lead, crear cita, etc.) "
         "usa las herramientas disponibles en lugar de generar JSON de texto."
         "\n- Si no entiendes algo, pide al usuario que lo repita amablemente."
-        "\n- Usa un tono profesional y directo."
+        "\n- Usa un tono comercial, seguro y directo."
         "\n- Evita frases largas."
     )
     context_section = ""
     if faiss_context:
         context_section = f"\n\nCONTEXTO DE LA EMPRESA:\n{faiss_context}\n{BUSSINESS_RESUME}"
 
-    # Fill the placeholders that system_prompt contains
-    filled = (
-        system_prompt
-        .replace("{tenant_id}", tenant_id or "")
-        .replace("{timezone}", TIMEZONE or "UTC")
-    )
+    filled = build_system_prompt(tenant_id=tenant_id, timezone=TIMEZONE)
     return filled + context_section + voice_addendum
 
 

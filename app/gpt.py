@@ -7,6 +7,7 @@ from langchain.prompts import PromptTemplate
 from langdetect import detect
 from app.services.retrieval import search_semantic
 from app.leads import create_lead
+from app.prompting import build_system_prompt
 from app.services.google_calendar import call_google_calendar
 from app.services.usage_tracker import save_token_usage
 from app.services.whatsapp import whatsapp_service
@@ -207,12 +208,12 @@ Contexto de la empresa:
 Pregunta del usuario:
 {query}
 
-Responde estrictamente en el lenguaje de este texto {language}.
+Responde estrictamente en el idioma detectado: {language}.
 """
 
-combined_prompt = "Fecha y hora actual: {current_date}\n\n" + system_prompt + "\n" + template
+combined_prompt = "Fecha y hora actual: {current_date}\n\n{system_prompt}\n\n" + template
 prompt = PromptTemplate(
-    input_variables=["context", "query", "language", "tenant_id", "timezone", "current_date"],
+    input_variables=["context", "query", "language", "current_date", "system_prompt"],
     template=combined_prompt
 )
 
@@ -268,10 +269,15 @@ def generate_answer(question: str, history=None, context="", tenant_id: str = No
     chain_input = {
         "context": full_context,
         "query": question,
-        "language": question,
+        "language": detect_language(question),
         "tenant_id": tenant_id,
         "timezone": TIMEZONE,
-        "current_date": datetime.now().strftime("%Y-%m-%d (%A)")
+        "current_date": datetime.now().strftime("%Y-%m-%d (%A)"),
+        "system_prompt": build_system_prompt(
+            tenant_id=tenant_id,
+            timezone=TIMEZONE,
+            activation_text=f"{question}\n{history_text}",
+        ),
     }
 
     print("Generando respuesta con el siguiente input al modelo:")
