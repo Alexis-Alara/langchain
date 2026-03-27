@@ -14,10 +14,9 @@ import argparse
 from datetime import datetime
 from langchain_openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
-from app.db.mongo import knowledge_collection as collection
-from app.db.config import OPENAI_API_KEY, MONGO_DB
+from app.shared.config.database import knowledge_collection as collection
+from app.shared.config.settings import FAISS_PATH, MONGO_DB, OPENAI_API_KEY
 
-FAISS_PATH = "faiss_index"
 FAISS_BACKUP = f"faiss_index.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 def backup_faiss():
