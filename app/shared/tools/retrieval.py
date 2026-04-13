@@ -20,6 +20,7 @@ def search_semantic(query: str, tenant_id: str, top_k: int = 3, k: int = None):
         for result in results
         if (result.metadata.get("tenant_id") or result.metadata.get("tenantId")) == tenant_id
     ]
+    logger.info("Tenant id %r metadata tenant ids: %r", tenant_id, [result.metadata.get("tenant_id") for result in results])
     logger.info(
         "Semantic search query=%r tenant=%s raw=%s filtered=%s",
         query,

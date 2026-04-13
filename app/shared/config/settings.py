@@ -16,6 +16,7 @@ def get_env(*names: str, default=None):
 APP_NAME = "Impulso Chatbot API"
 APP_DESCRIPTION = "API para chatbot con integraciones modulares"
 APP_VERSION = "1.0.0"
+ENABLED_MODULES = get_env("ENABLED_MODULES", default="all")
 
 OPENAI_API_KEY = get_env("OPENAI_API_KEY")
 OPENAI_MODEL = get_env("OPENAI_MODEL", default="gpt-4o-mini")

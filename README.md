@@ -19,6 +19,34 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --reload
 ```
 
+## Configurar modulos
+
+Para generar una configuracion base solo con los modulos que necesitas:
+
+```bash
+python -m app.scripts.configure_modules --modules whatsapp --output .env
+```
+
+Ejemplo con varios modulos:
+
+```bash
+python -m app.scripts.configure_modules --modules whatsapp,webchat --output .env
+```
+
+Ver modulos disponibles:
+
+```bash
+python -m app.scripts.configure_modules --list
+```
+
+Generar, validar y arrancar en un solo paso:
+
+```bash
+python -m app.scripts.configure_modules --modules whatsapp --output .env --run --reload
+```
+
+Si faltan variables obligatorias, el script te las lista y no arranca la app.
+
 ## Documentacion
 
 - [Arquitectura](app/docs/architecture/overview.md)

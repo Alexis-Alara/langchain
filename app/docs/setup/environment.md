@@ -2,6 +2,30 @@
 
 La plantilla base esta en `.env.example`.
 
+## Activacion de modulos
+
+La aplicacion lee `ENABLED_MODULES`.
+
+Ejemplos:
+
+- `ENABLED_MODULES=whatsapp`
+- `ENABLED_MODULES=whatsapp,webchat`
+- `ENABLED_MODULES=all`
+
+Tambien puedes generar el archivo automaticamente:
+
+```bash
+python -m app.scripts.configure_modules --modules whatsapp --output .env
+```
+
+Y si quieres generar, validar y arrancar:
+
+```bash
+python -m app.scripts.configure_modules --modules whatsapp --output .env --run --reload
+```
+
+El script valida automaticamente las variables obligatorias para los modulos elegidos.
+
 ## Requeridas
 
 - `OPENAI_API_KEY`

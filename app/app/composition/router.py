@@ -7,4 +7,4 @@ from app.shared.routes.system import router as system_router
 def register_routers(app: FastAPI):
     app.include_router(system_router)
     for module in REGISTERED_MODULES:
-        app.include_router(module.router, prefix="/api")
+        app.include_router(module.load_router(), prefix="/api")

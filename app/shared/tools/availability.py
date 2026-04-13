@@ -97,7 +97,7 @@ def get_availability_suggestions(preferred_date=None, days_ahead=7, max_slots=50
             params = {"date": preferred_date}
         else:
             endpoint = "/api/calendar/availability/suggestions"
-            params = {"daysAhead": days_ahead, "maxSlots": max_slots}
+            params = {"daysAhead": days_ahead, "maxSlots": max_slots, "fromDate": datetime.now().strftime("%Y-%m-%d")}
 
         response = requests.get(
             f"{API_BASE_URL}{endpoint}",
@@ -119,9 +119,7 @@ def get_availability_suggestions(preferred_date=None, days_ahead=7, max_slots=50
 
 def get_next_available_slot(from_date=None, max_days_ahead=30, tenant_id=None):
     try:
-        params = {"maxDaysAhead": max_days_ahead}
-        if from_date:
-            params["fromDate"] = from_date
+        params = {"maxDaysAhead": max_days_ahead, "fromDate": from_date or datetime.now().strftime("%Y-%m-%d")}
 
         response = requests.get(
             f"{API_BASE_URL}/api/calendar/availability/next",
