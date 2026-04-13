@@ -18,3 +18,5 @@ Gestiona Messenger e Instagram Messaging con un modulo aislado.
 - `META_APP_SECRET`
 - `META_IG_BUSINESS_ID`
 - `INSTAGRAM_ACCESS_TOKEN`
+- `OPENAI_API_KEY`
+- `TENANT_ID`
