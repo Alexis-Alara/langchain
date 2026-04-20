@@ -49,6 +49,10 @@ META_GRAPH_VERSION = get_env("META_GRAPH_VERSION", default="v21.0")
 
 SUPPORT_PHONE = get_env("SUPPORT_PHONE", default="")
 BUSINESS_RESUME = get_env("BUSINESS_RESUME", "BUSSINESS_RESUME", default="")
+# Base del prompt del agente: "general" | "custom"
+AGENT_BASE = get_env("AGENT_BASE", default="general")
+# Especializacion sobre la base: "sales" | "customer_service" | "" (ninguna)
+AGENT_PROFILE = get_env("AGENT_PROFILE", default="")
 TWILIO_MEDIA_STREAM_URL = get_env(
     "TWILIO_MEDIA_STREAM_URL",
     default="wss://unconvened-unmindfully-xander.ngrok-free.dev/api/twilio/media-stream",

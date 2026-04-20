@@ -9,8 +9,12 @@ from langchain_openai import ChatOpenAI
 from langdetect import detect
 
 from app.modules.whatsapp.tools.service import whatsapp_service
-from app.shared.config.settings import OPENAI_API_KEY, OPENAI_MODEL, SUPPORT_PHONE, TENANT_ID, TIMEZONE
-from app.shared.prompts.assistant import combined_prompt
+from app.shared.config.settings import AGENT_BASE, AGENT_PROFILE, OPENAI_API_KEY, OPENAI_MODEL, SUPPORT_PHONE, TENANT_ID, TIMEZONE
+from app.shared.prompts.assistant import context_prompt
+from app.shared.prompts.assistant import system_prompt as _general_system_prompt
+from app.shared.prompts.customer_service import specialization_prompt as _customer_service_addon
+from app.shared.prompts.custom import system_prompt as _custom_system_prompt
+from app.shared.prompts.sales import specialization_prompt as _sales_addon
 from app.shared.tools.availability import (
     check_slot_availability,
     format_availability_suggestions,
@@ -29,10 +33,31 @@ llm = ChatOpenAI(
     temperature=0.2,
 )
 
-prompt = PromptTemplate(
-    input_variables=["context", "query", "language", "tenant_id", "timezone", "current_date"],
-    template=combined_prompt,
-)
+_PROMPT_TEMPLATE_CACHE: dict[str, PromptTemplate] = {}
+
+_BASE_SYSTEM_PROMPTS: dict[str, str] = {
+    "general": _general_system_prompt,
+    "custom": _custom_system_prompt,
+}
+
+_SPECIALIZATION_ADDONS: dict[str, str] = {
+    "sales": _sales_addon,
+    "customer_service": _customer_service_addon,
+}
+
+
+def _get_prompt(base: str, profile: str) -> PromptTemplate:
+    cache_key = f"{base}:{profile}"
+    if cache_key not in _PROMPT_TEMPLATE_CACHE:
+        base_system = _BASE_SYSTEM_PROMPTS.get(base, _general_system_prompt)
+        addon = _SPECIALIZATION_ADDONS.get(profile, "")
+        full_system = base_system + ("\n" + addon if addon else "")
+        template = "Fecha y hora actual: {current_date}\n\n" + full_system + "\n" + context_prompt
+        _PROMPT_TEMPLATE_CACHE[cache_key] = PromptTemplate(
+            input_variables=["context", "query", "language", "tenant_id", "timezone", "current_date"],
+            template=template,
+        )
+    return _PROMPT_TEMPLATE_CACHE[cache_key]
 
 
 def detect_language(text):
@@ -152,8 +177,11 @@ def generate_answer(
     tenant_id: str = None,
     conversation_id: str = None,
     source: str = "web",
+    profile: str = None,
 ):
     tenant_id = tenant_id or TENANT_ID
+    base = AGENT_BASE
+    profile = profile or AGENT_PROFILE
 
     if not context:
         documents = search_semantic(question, tenant_id)
@@ -178,7 +206,7 @@ def generate_answer(
         "timezone": TIMEZONE,
         "current_date": datetime.now().strftime("%Y-%m-%d (%A)"),
     }
-    response = llm.invoke(prompt.format(**chain_input))
+    response = llm.invoke(_get_prompt(base, profile).format(**chain_input))
     response_text = response.content
 
     prompt_tokens, completion_tokens, total_tokens = _extract_token_usage(response)

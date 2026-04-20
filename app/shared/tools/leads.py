@@ -12,7 +12,7 @@ def create_lead(data: dict) -> str:
     if payload.get("guestEmails"):
         payload["email"] = payload["guestEmails"][0]
         del payload["guestEmails"]
-    if payload.get("intent_level"):
+    if not payload.get("intent_level"):
         payload["intent_level"] = "medium/high"
     if not payload.get("name"):
         payload["name"] = "Desconocido"
