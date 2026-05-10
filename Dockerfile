@@ -16,7 +16,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar código de la aplicación
 COPY app ./app
-COPY faiss_index ./faiss_index
 
 # Usuario no root
 RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
