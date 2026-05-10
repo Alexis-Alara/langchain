@@ -53,6 +53,7 @@ def init_faiss():
         )
 
     if texts:
+        os.makedirs(FAISS_PATH, exist_ok=True)
         vector_store = FAISS.from_texts(texts, embeddings_model, metadatas=metadatas)
         vector_store.save_local(FAISS_PATH)
         logger.info("FAISS created from Mongo and saved to disk: %s", FAISS_PATH)
