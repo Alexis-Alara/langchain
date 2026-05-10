@@ -1,4 +1,3 @@
-from app.shared.config.settings import BUSINESS_RESUME, TIMEZONE
 from app.shared.prompts.assistant import system_prompt
 
 VOICE_PROMPT_ADDITION = (
@@ -11,8 +10,8 @@ VOICE_PROMPT_ADDITION = (
 )
 
 
-def build_voice_instructions(faiss_context: str, tenant_id: str, timezone: str = TIMEZONE):
-    context_chunks = [chunk for chunk in [faiss_context, BUSINESS_RESUME] if chunk]
+def build_voice_instructions(faiss_context: str, tenant_id: str, timezone: str = "UTC"):
+    context_chunks = [chunk for chunk in [faiss_context] if chunk]
     context_section = ""
     if context_chunks:
         context_section = "\n\nCONTEXTO DE LA EMPRESA:\n" + "\n".join(context_chunks)

@@ -68,8 +68,7 @@ COMMON_ENV_SECTIONS = (
             ("TIMEZONE", "America/Mexico_City"),
             ("API_BASE_URL", "http://localhost:3000"),
             ("FAISS_PATH", "faiss_index"),
-            ("SUPPORT_PHONE", "+5215551234567"),
-            ("BUSINESS_RESUME", "Resumen corto del negocio"),
+            ("SUPPORT_PHONE", "+5215551234567")
         ),
     ),
     (
