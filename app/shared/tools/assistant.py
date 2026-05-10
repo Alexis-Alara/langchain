@@ -13,7 +13,7 @@ from app.shared.config.settings import AGENT_BASE, AGENT_PROFILE, OPENAI_API_KEY
 from app.shared.prompts.assistant import context_prompt
 from app.shared.prompts.assistant import system_prompt as _general_system_prompt
 from app.shared.prompts.customer_service import specialization_prompt as _customer_service_addon
-from app.shared.prompts.custom import system_prompt as _custom_system_prompt
+from app.shared.prompts.custom import custom_prompt as _custom_system_prompt
 from app.shared.prompts.sales import specialization_prompt as _sales_addon
 from app.shared.tools.availability import (
     check_slot_availability,
@@ -35,8 +35,7 @@ llm = ChatOpenAI(
 
 _PROMPT_TEMPLATE_CACHE: dict[str, PromptTemplate] = {}
 
-_BASE_SYSTEM_PROMPTS: dict[str, str] = {
-    "general": _general_system_prompt,
+_OPTIONAL_BASE_ADDONS = {
     "custom": _custom_system_prompt,
 }
 
@@ -49,9 +48,18 @@ _SPECIALIZATION_ADDONS: dict[str, str] = {
 def _get_prompt(base: str, profile: str) -> PromptTemplate:
     cache_key = f"{base}:{profile}"
     if cache_key not in _PROMPT_TEMPLATE_CACHE:
-        base_system = _BASE_SYSTEM_PROMPTS.get(base, _general_system_prompt)
-        addon = _SPECIALIZATION_ADDONS.get(profile, "")
-        full_system = base_system + ("\n" + addon if addon else "")
+        base_system = _general_system_prompt
+
+        base_addon = _OPTIONAL_BASE_ADDONS.get(base, "")
+
+        specialization_addon = _SPECIALIZATION_ADDONS.get(profile, "")
+        
+        full_system = (
+            base_system
+            + ("\n" + base_addon if base_addon else "")
+            + ("\n" + specialization_addon if specialization_addon else "")
+        )
+        
         template = "Fecha y hora actual: {current_date}\n\n" + full_system + "\n" + context_prompt
         _PROMPT_TEMPLATE_CACHE[cache_key] = PromptTemplate(
             input_variables=["context", "query", "language", "tenant_id", "timezone", "current_date"],
@@ -224,11 +232,14 @@ def generate_answer(
         )
 
     cleaned = re.sub(r"^```json\n|\n```$", "", response_text.strip(), flags=re.MULTILINE)
+    logger.info("Generated response: %s", response_text)
+    logger.info("Cleaned response for JSON parsing: %s", cleaned)
     try:
-        action_json = json.loads(cleaned)
+        parsed = json.loads(cleaned)
+        action_json = parsed if isinstance(parsed, dict) else {}
     except json.JSONDecodeError:
         action_json = {}
-
+    logger.info("Parsed action JSON: %s", action_json)
     if "action" in action_json:
         action_response = _handle_action(action_json, question, tenant_id, conversation_id)
         if action_response is not None:

@@ -48,7 +48,6 @@ META_APP_SECRET = get_env("META_APP_SECRET", default="")
 META_GRAPH_VERSION = get_env("META_GRAPH_VERSION", default="v21.0")
 
 SUPPORT_PHONE = get_env("SUPPORT_PHONE", default="")
-BUSINESS_RESUME = get_env("BUSINESS_RESUME", "BUSSINESS_RESUME", default="")
 # Base del prompt del agente: "general" | "custom"
 AGENT_BASE = get_env("AGENT_BASE", default="general")
 # Especializacion sobre la base: "sales" | "customer_service" | "" (ninguna)
