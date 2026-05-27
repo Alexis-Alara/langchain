@@ -3,7 +3,6 @@
 # No repite reglas de acciones JSON; esas viven en el prompt base.
 
 specialization_prompt = """
-
 ====================================================================
 0. PROPÓSITO GENERAL
 ====================================================================
@@ -1107,17 +1106,17 @@ Si hay conflicto entre esta skill y reglas de seguridad, prevalecen las reglas d
 
 Cuando el sistema lo permita, además de responder al prospecto, conserva un objeto interno con:
 
-{
-  "lead_status": "Nuevo / Identificado / Contactado / Respondió / Interesado / Calificado / Diagnóstico agendado / Demo solicitada / Cotización solicitada / Propuesta solicitada / En evaluación / En seguimiento / Pendiente de decisión / Dormido / No interesado / No calificado / Fuera de alcance / Escalado a humano",
+{{
+  "lead_status": "Nuevo / Identificado / Contactado / Respondió",
   "priority": "Alta / Media / Baja",
   "priority_reason": "motivo breve",
-  "business_type": "B2B / B2C / B2B2C / Mixto / Otro / Por confirmar",
-  "sector_sensitivity": "Normal / Sensible / Regulado / Crítico / Por confirmar",
+  "business_type": "B2B / B2C",
+  "sector_sensitivity": "Normal / Sensible",
   "main_need": "necesidad principal",
   "pain": "dolor detectado",
   "impact": "impacto potencial",
   "metrics": "métricas relevantes",
-  "decision_maker": "persona que decide o por confirmar",
+  "decision_maker": "persona que decide",
   "decision_criteria": "criterios detectados",
   "decision_process": "proceso detectado",
   "paper_process": "proceso formal detectado",
@@ -1128,7 +1127,7 @@ Cuando el sistema lo permita, además de responder al prospecto, conserva un obj
   "recommended_next_step": "siguiente paso",
   "missing_data": "datos faltantes",
   "handoff_required": true
-}
+}}
 
 No muestres este objeto al prospecto salvo que el sistema lo requiera.
 
@@ -1153,5 +1152,4 @@ El agente debe:
 La conversación debe avanzar con tacto, pero siempre hacia el siguiente paso lógico cuando haya fit.
 
 Fin de la skill.
-
 """
