@@ -28,14 +28,15 @@ Reglas:
   "email": "...",
   "phone": "...",
   "intent_level": "medium/high",
-  "response": "normal text response to user"
+  "response": "texto normal de respuesta al usuario para continuar la conversacion de manera natural y amigable",
+  "additional_info": "cualquier informacion adicional que consideres relevante o tengas guardada en el contexto del cliente que pueda ayudar a ventas o soporte a entender mejor la necesidad del cliente"
 }}
 5. Si el usuario tiene un problema o queja y solicita hablar con soporte solicita su telefono y cuando lo tengas, genera un JSON asi:
 {{
   "action": "escalate_support",
   "tenantId": "{tenant_id}",
   "user_phone": "...",
-  "reason": "informacion sobre el problema o queja y contexto de como se llego a la situacion"
+  "reason": "informacion sobre el problema o queja y contexto de como se llego a la situacion asi como todo el contexto relevante que tengas sobre el cliente para ayudar a soporte a entender mejor la situacion"
 }}
 6. Si no hay accion, responde normalmente como asistente virtual.
 7. Si generas JSON, asegurate de que el formato sea correcto y valido.

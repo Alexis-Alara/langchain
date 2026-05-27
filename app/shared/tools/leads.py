@@ -20,6 +20,8 @@ def create_lead(data: dict) -> str:
         payload["response"] = "Cita agendada correctamente."
     if not payload.get("date"):
         payload["date"] = datetime.utcnow().date().isoformat()
+    if not payload.get("aditional_info"):
+        payload["aditional_info"] = ""
     if payload.get("startTime"):
         del payload["startTime"]
 
