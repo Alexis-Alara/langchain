@@ -66,6 +66,7 @@ REALTIME_TOOLS = [
                 "email": {"type": "string"},
                 "phone": {"type": "string"},
                 "intent_level": {"type": "string", "enum": ["medium", "high"]},
+                "aditional_info": {"type": "string"},
             },
             "required": ["intent_level"],
         },
