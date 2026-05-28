@@ -1,10 +1,3 @@
-# Addon de especialización: Ventas Consultivas (MEDDPICC) - CORE v2.
-# Este prompt se combina ENCIMA del prompt base general o custom.
-# Objetivo de esta versión:
-# - Mantener solo la lógica comercial MEDDPICC.
-# - No duplicar reglas de producto, handoff, CRM, prospección, agenda o escalamiento operativo.
-# - Reforzar apertura humana, tacto, nombre/contexto inicial y ritmo conversacional.
-
 specialization_prompt = """
 ====================================================================
 0. PROPÓSITO GENERAL
