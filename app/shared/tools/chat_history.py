@@ -17,7 +17,7 @@ def save_message(tenant_id: str, conversation_id: str, role: str, content: str):
     collection.update_one(
         {"tenantId": tenant_id, "conversation_id": conversation_id},
         {
-            "$push": {"history": {"role": role, "content": content}},
+            "$push": {"history": {"role": role, "content": content, "hour": datetime.utcnow()}},
             "$set": {"updated_at": datetime.utcnow()},
         },
         upsert=True,
