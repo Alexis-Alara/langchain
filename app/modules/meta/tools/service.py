@@ -219,21 +219,33 @@ class MetaMessagingService:
         return diagnostics
 
     async def get_sender_name(self, sender_id: str, platform: str) -> str:
-        """Fetch the display name of a Messenger/Instagram sender from the Graph API."""
+        """Fetch the display name of a Messenger/Instagram sender from the Graph API.
+
+        Messenger returns `name` (full name) via the PSID endpoint.
+        Instagram only exposes `username` via the IGSID endpoint — `name` is
+        typically not available for Instagram users through the Messaging API.
+        """
         normalized = self.normalize_platform(platform)
         token = self.ig_access_token if normalized == "instagram" and self.ig_access_token else self.page_access_token
         if not token:
             return sender_id
 
+        # Request both fields; Instagram exposes username, Messenger exposes name.
         url = f"{self.base_url}/{sender_id}"
-        params = {"fields": "name", "access_token": token}
+        params = {"fields": "name,username", "access_token": token}
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                     if resp.status == 200:
                         data = await resp.json()
+                        # Prefer full name, fall back to username (Instagram), then sender_id
                         name = (data.get("name") or "").strip()
-                        return name if name else sender_id
+                        username = (data.get("username") or "").strip()
+                        return name or username or sender_id
+                    logger.warning(
+                        "[Meta] Graph API returned %s fetching sender %s: %s",
+                        resp.status, sender_id, await resp.text(),
+                    )
         except Exception as exc:
             logger.warning("[Meta] Could not fetch sender name for %s: %s", sender_id, exc)
         return sender_id
