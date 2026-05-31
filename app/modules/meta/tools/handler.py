@@ -27,7 +27,6 @@ async def handle_webhook(body: Dict[str, Any], tenant_id: str = None):
     for entry in body.get("entry", []):
         for event in entry.get("messaging", []):
             sender_id = event.get("sender", {}).get("id")
-            name = event.get("sender", {}).get("name", "Unknown")
             message = event.get("message")
             if not sender_id or not message or message.get("is_echo"):
                 continue
@@ -36,6 +35,7 @@ async def handle_webhook(body: Dict[str, Any], tenant_id: str = None):
             if not message_text:
                 continue
 
+            name = await meta_messaging_service.get_sender_name(sender_id, source)
             conversation_id = f"{source}_{name or sender_id}"
             answer = process_text_message(
                 message_text,

@@ -218,6 +218,26 @@ class MetaMessagingService:
         )
         return diagnostics
 
+    async def get_sender_name(self, sender_id: str, platform: str) -> str:
+        """Fetch the display name of a Messenger/Instagram sender from the Graph API."""
+        normalized = self.normalize_platform(platform)
+        token = self.ig_access_token if normalized == "instagram" and self.ig_access_token else self.page_access_token
+        if not token:
+            return sender_id
+
+        url = f"{self.base_url}/{sender_id}"
+        params = {"fields": "name", "access_token": token}
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        name = (data.get("name") or "").strip()
+                        return name if name else sender_id
+        except Exception as exc:
+            logger.warning("[Meta] Could not fetch sender name for %s: %s", sender_id, exc)
+        return sender_id
+
     async def send_text_message(self, platform: str, recipient_id: str, message: str) -> Dict[str, Any]:
         normalized_platform = self.normalize_platform(platform)
         if not self.validate_config(normalized_platform):
