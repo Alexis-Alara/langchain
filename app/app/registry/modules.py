@@ -38,6 +38,12 @@ ALL_MODULES = (
         env_vars=("META_PAGE_ACCESS_TOKEN", "META_VERIFY_TOKEN"),
     ),
     ModuleRegistration(
+        name="messaging",
+        description="Mensajeria saliente y control de conversaciones en soporte",
+        router_import="app.modules.messaging.routes.router:router",
+        env_vars=("TENANT_ID", "MESSAGING_API_TOKEN"),
+    ),
+    ModuleRegistration(
         name="twilio_voice",
         description="Entrada de voz por Twilio Media Streams y OpenAI Realtime",
         router_import="app.modules.twilio_voice.routes.router:router",
@@ -64,11 +70,12 @@ COMMON_ENV_SECTIONS = (
     (
         "App",
         (
+            ("APP_ENV", "development"),
             ("TENANT_ID", "default"),
             ("TIMEZONE", "America/Mexico_City"),
             ("API_BASE_URL", "http://localhost:3000"),
             ("FAISS_PATH", "faiss_index"),
-            ("SUPPORT_PHONE", "+5215551234567")
+            ("SUPPORT_PHONE", "+5215551234567"),
         ),
     ),
     (
@@ -108,6 +115,17 @@ MODULE_ENV_SECTIONS = {
                 ("META_VERIFY_TOKEN", "IMPULSO_META_VERIFY_TOKEN"),
                 ("META_APP_SECRET", "tu_meta_app_secret"),
                 ("META_GRAPH_VERSION", "v21.0"),
+            ),
+        ),
+    ),
+    "messaging": (
+        (
+            "Messaging",
+            (
+                ("MESSAGING_API_TOKEN", "tu_token_fijo_para_portal"),
+                ("CORS_ALLOW_ORIGINS", "http://localhost:5173"),
+                ("CORS_PRODUCTION_IP", "203.0.113.10"),
+                ("CORS_PRODUCTION_PORTS", "3000"),
             ),
         ),
     ),

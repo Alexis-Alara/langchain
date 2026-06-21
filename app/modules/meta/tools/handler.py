@@ -3,6 +3,7 @@ from typing import Any, Dict
 
 from app.modules.meta.tools.service import meta_messaging_service
 from app.shared.config.settings import TENANT_ID
+from app.shared.tools.chat_history import is_support_active, save_message, set_conversation_name
 from app.shared.tools.chat_flow import process_text_message
 
 logger = logging.getLogger(__name__)
@@ -35,8 +36,14 @@ async def handle_webhook(body: Dict[str, Any], tenant_id: str = None):
             if not message_text:
                 continue
 
-            name = await meta_messaging_service.get_sender_name(sender_id, source)
-            conversation_id = f"{source}_{name or sender_id}"
+            conversation_id = f"{source}_{sender_id}"
+            sender_name = await meta_messaging_service.get_sender_name(sender_id, source)
+            set_conversation_name(tenant_id, conversation_id, sender_name)
+            if is_support_active(tenant_id, conversation_id):
+                save_message(tenant_id, conversation_id, "user", message_text)
+                processed += 1
+                continue
+
             answer = process_text_message(
                 message_text,
                 tenant_id,

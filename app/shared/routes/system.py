@@ -20,6 +20,8 @@ async def root():
         ],
         "endpoints": [
             "/api/query",
+            "/api/messages",
+            "/api/messages/close",
             "/api/whatsapp/webhook",
             "/api/meta/webhook",
             "/api/twilio/voice",

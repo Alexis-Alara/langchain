@@ -13,10 +13,39 @@ def get_env(*names: str, default=None):
     return default
 
 
+def get_env_list(*names: str, default=None):
+    value = get_env(*names)
+    if value in (None, ""):
+        return list(default or [])
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def build_cors_origins():
+    if APP_ENV != "production":
+        return CORS_ALLOW_ORIGINS
+
+    if not CORS_PRODUCTION_IP:
+        raise ValueError("Missing required environment variable: CORS_PRODUCTION_IP")
+
+    origins = [
+        f"http://{CORS_PRODUCTION_IP}",
+        f"https://{CORS_PRODUCTION_IP}",
+    ]
+    for port in CORS_PRODUCTION_PORTS:
+        if port == "80":
+            continue
+        if port == "443":
+            continue
+        origins.append(f"http://{CORS_PRODUCTION_IP}:{port}")
+        origins.append(f"https://{CORS_PRODUCTION_IP}:{port}")
+    return origins
+
+
 APP_NAME = "Impulso Chatbot API"
 APP_DESCRIPTION = "API para chatbot con integraciones modulares"
 APP_VERSION = "1.0.0"
 ENABLED_MODULES = get_env("ENABLED_MODULES", default="all")
+APP_ENV = get_env("APP_ENV", default="development").strip().lower()
 
 OPENAI_API_KEY = get_env("OPENAI_API_KEY")
 OPENAI_MODEL = get_env("OPENAI_MODEL", default="gpt-4o-mini")
@@ -26,6 +55,11 @@ TENANT_ID = get_env("TENANT_ID", default="default")
 TIMEZONE = get_env("TIMEZONE", default="America/Mexico_City")
 API_BASE_URL = get_env("API_BASE_URL", default="http://localhost:3000")
 FAISS_PATH = get_env("FAISS_PATH", default="faiss_index")
+CORS_ALLOW_ORIGINS = get_env_list("CORS_ALLOW_ORIGINS", default=["*"])
+CORS_PRODUCTION_IP = get_env("CORS_PRODUCTION_IP", default="").strip()
+CORS_PRODUCTION_PORTS = get_env_list("CORS_PRODUCTION_PORTS", default=[])
+CORS_EFFECTIVE_ORIGINS = build_cors_origins()
+MESSAGING_API_TOKEN = get_env("MESSAGING_API_TOKEN", default="")
 
 MONGO_URI = get_env("MONGO_URI", "MONGODB_URI")
 MONGO_DB = get_env("MONGO_DB", "MONGODB_DATABASE")

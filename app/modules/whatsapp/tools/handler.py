@@ -5,6 +5,7 @@ from openai import AsyncOpenAI
 
 from app.modules.whatsapp.tools.service import whatsapp_service
 from app.shared.config.settings import OPENAI_API_KEY, TENANT_ID
+from app.shared.tools.chat_history import is_support_active, save_message
 from app.shared.tools.chat_flow import process_text_message
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,11 @@ async def handle_webhook(body, tenant_id: str = None):
                 conversation_id = f"whatsapp_{phone_number}"
 
                 if message.type == "text" and message.text:
+                    if is_support_active(tenant_id, conversation_id):
+                        save_message(tenant_id, conversation_id, "user", message.text.body)
+                        processed += 1
+                        continue
+
                     answer = process_text_message(
                         message.text.body,
                         tenant_id,
@@ -56,6 +62,11 @@ async def handle_webhook(body, tenant_id: str = None):
                             model="whisper-1",
                             file=audio_file,
                         )
+                        if is_support_active(tenant_id, conversation_id):
+                            save_message(tenant_id, conversation_id, "user", transcript.text)
+                            processed += 1
+                            continue
+
                         answer = process_text_message(
                             transcript.text,
                             tenant_id,
